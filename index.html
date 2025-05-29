@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>어깨동무 놀이터 저스트댄스 예약</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            overscroll-behavior: none; 
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr)); /* Mon-Fri */
+            gap: 4px;
+        }
+        .day-cell {
+            min-height: 130px; 
+            padding: 8px; 
+            border: 1px solid #e5e7eb; 
+            border-radius: 0.375rem; 
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
+        }
+        .day-cell.empty { /* For placeholder cells */
+            background-color: #f9fafb; /* Tailwind gray-50, or transparent */
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .day-number {
+            font-weight: 500; 
+            margin-bottom: 4px;
+        }
+        .slot-button {
+            width: 100%;
+            padding: 6px 0; 
+            margin-top: 4px; 
+            border-radius: 0.375rem; 
+            font-size: 0.875rem; 
+            transition: background-color 0.2s, opacity 0.2s;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .slot-button.available {
+            background-color: #3b82f6; 
+            color: white;
+            cursor: pointer;
+        }
+        .slot-button.available:hover {
+            background-color: #2563eb; 
+        }
+        .slot-button.reserved {
+            background-color: #6b7280; 
+            color: white;
+            cursor: pointer; 
+        }
+        .slot-button.reserved:hover {
+            background-color: #4b5563; 
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 0.5rem; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); 
+            width: 90%;
+            max-width: 400px;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .admin-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fef3c7; 
+            border: 1px solid #fcd34d; 
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4 selection:bg-blue-200">
+
+    <div class="w-full max-w-4xl bg-white p-4 sm:p-6 rounded-xl shadow-xl">
+        <header class="mb-6 text-center">
+            <h1 class="text-2xl sm:text-3xl font-bold text-blue-600">🕺 어깨동무 놀이터 저스트댄스 예약 💃</h1>
+            <p class="text-gray-600 mt-1">점심시간에 저스트댄스를 예약하고 즐겨보세요! (월-금)</p>
+            <p class="text-xs text-gray-500 mt-2">User ID: <span id="userIdDisplay" class="font-mono"></span></p>
+        </header>
+
+        <div class="flex justify-between items-center mb-4 px-2">
+            <button id="prevMonth" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition active:bg-blue-700 shadow">이전 달</button>
+            <h2 id="currentMonthYear" class="text-xl sm:text-2xl font-semibold text-gray-700"></h2>
+            <button id="nextMonth" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition active:bg-blue-700 shadow">다음 달</button>
+        </div>
+
+        <div class="calendar-grid mb-4 text-center font-medium text-gray-600">
+            <div>월</div><div>화</div><div>수</div><div>목</div><div>금</div>
+        </div>
+        <div id="calendarDays" class="calendar-grid">
+            </div>
+
+        <div class="admin-section mt-6 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+            <h3 class="text-lg font-semibold text-yellow-700 mb-2">🛠️ 관리자 기능</h3>
+            <div class="flex flex-col sm:flex-row sm:items-end gap-2">
+                <div class="flex-grow">
+                    <label for="adminPassword" class="block text-sm font-medium text-gray-700 mb-1">관리자 비밀번호:</label>
+                    <input type="password" id="adminPassword" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm" placeholder="관리자 비밀번호 입력">
+                </div>
+                <button id="adminDeleteMonthReservations" class="w-full sm:w-auto px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition shadow active:bg-red-700">이번 달 전체 예약 삭제</button>
+            </div>
+            <p id="adminError" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+    </div>
+
+    <div id="reservationModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800" id="modalTitle">예약하기</h3>
+            <p id="modalDateSlotInfo" class="mb-4 text-gray-600"></p>
+            <div>
+                <label for="studentName" class="block text-sm font-medium text-gray-700 mb-1">학번과 이름:</label>
+                <input type="text" id="studentName" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="예: 6101 김명진">
+            </div>
+            <div class="mt-3">
+                <label for="reservationPassword" class="block text-sm font-medium text-gray-700 mb-1">예약 비밀번호:</label>
+                <input type="password" id="reservationPassword" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="숫자 4자리 이상 (예: 1234)">
+                <p id="inputError" class="text-red-500 text-xs mt-1 hidden"></p>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancelReservation" type="button" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition">취소</button>
+                <button id="confirmReservation" type="button" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition">예약 확정</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteReservationModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">예약 취소</h3>
+            <p id="deleteModalDateSlotInfo" class="mb-4 text-gray-600"></p>
+            <div>
+                <label for="deletePassword" class="block text-sm font-medium text-gray-700 mb-1">예약 비밀번호:</label>
+                <input type="password" id="deletePassword" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm" placeholder="예약 시 설정한 비밀번호">
+                <p id="deleteError" class="text-red-500 text-xs mt-1 hidden"></p>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancelDelete" type="button" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition">취소</button>
+                <button id="confirmDelete" type="button" class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition">예약 취소 확정</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="adminConfirmDeleteAllModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-2 text-red-600">⚠️ 경고: 전체 예약 삭제</h3>
+            <p id="adminConfirmText" class="mb-4 text-gray-700">이번 달(<span id="adminConfirmMonth"></span>)의 모든 저스트댄스 예약을 정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancelAdminDeleteAll" type="button" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition">아니요, 취소합니다</button>
+                <button id="confirmAdminDeleteAll" type="button" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition">예, 모두 삭제합니다</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageBox" class="fixed bottom-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-md transition-opacity duration-300 opacity-0 pointer-events-none">
+        <p id="messageText"></p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, query, where, onSnapshot, serverTimestamp, deleteDoc, writeBatch, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "YOUR_API_KEY", 
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        const appIdForLocalStorage = typeof __app_id !== 'undefined' ? __app_id : 'just-dance-reservations-app-v2'; // Used for localStorage key prefix
+
+        let app;
+        let db;
+        let auth;
+        let currentUserId = null;
+        let isAuthReady = false;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('debug');
+            console.log("Firebase Initialized. App ID for localStorage:", appIdForLocalStorage);
+        } catch (error) {
+            console.error("Firebase initialization error:", error);
+            showMessage("Firebase 초기화에 실패했습니다. 페이지를 새로고침 해주세요.", "error");
+            document.getElementById('calendarDays').innerHTML = `<p class="text-red-500 text-center col-span-5">예약 시스템을 불러올 수 없습니다. Firebase 설정 오류.</p>`;
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserId = user.uid;
+                document.getElementById('userIdDisplay').textContent = currentUserId;
+            } else {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await setPersistence(auth, browserLocalPersistence);
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await setPersistence(auth, browserLocalPersistence);
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Error during sign-in:", error);
+                    showMessage("인증에 실패했습니다. 일부 기능이 제한될 수 있습니다.", "error");
+                    currentUserId = `anonymous-${crypto.randomUUID().substring(0,8)}`;
+                    document.getElementById('userIdDisplay').textContent = `오류 (${currentUserId.substring(0,12)}...)`;
+                }
+            }
+            isAuthReady = true;
+            if (currentDate) { // currentDate should be initialized by now
+                 renderCalendar();
+                 loadReservationsForMonth(currentDate.getFullYear(), currentDate.getMonth());
+            }
+        });
+
+        const calendarDaysEl = document.getElementById('calendarDays');
+        const currentMonthYearEl = document.getElementById('currentMonthYear');
+        const prevMonthBtn = document.getElementById('prevMonth');
+        const nextMonthBtn = document.getElementById('nextMonth');
+        let currentDate = new Date(); // Initialize with current real-world date
+
+        // Reservation Modal
+        const reservationModal = document.getElementById('reservationModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDateSlotInfo = document.getElementById('modalDateSlotInfo');
+        const studentNameInput = document.getElementById('studentName');
+        const reservationPasswordInput = document.getElementById('reservationPassword');
+        const confirmReservationBtn = document.getElementById('confirmReservation');
+        const cancelReservationBtn = document.getElementById('cancelReservation');
+        const inputError = document.getElementById('inputError');
+        
+        // Delete Reservation Modal
+        const deleteReservationModal = document.getElementById('deleteReservationModal');
+        const deleteModalDateSlotInfo = document.getElementById('deleteModalDateSlotInfo');
+        const deletePasswordInput = document.getElementById('deletePassword');
+        const confirmDeleteBtn = document.getElementById('confirmDelete');
+        const cancelDeleteBtn = document.getElementById('cancelDelete');
+        const deleteError = document.getElementById('deleteError');
+
+        // Admin Elements
+        const adminPasswordInput = document.getElementById('adminPassword');
+        const adminDeleteMonthBtn = document.getElementById('adminDeleteMonthReservations');
+        const adminErrorEl = document.getElementById('adminError');
+        const adminConfirmDeleteAllModal = document.getElementById('adminConfirmDeleteAllModal');
+        const adminConfirmMonthEl = document.getElementById('adminConfirmMonth');
+        const cancelAdminDeleteAllBtn = document.getElementById('cancelAdminDeleteAll');
+        const confirmAdminDeleteAllBtn = document.getElementById('confirmAdminDeleteAll');
+
+        let selectedDateStr = '';
+        let selectedSlotId = null;
+        let reservationDocIdToDelete = null; 
+
+        let reservations = {}; 
+        let unsubscribeReservations = null;
+
+        // --- Daily Reservation Limit (localStorage) ---
+        function getDailyReservationCount(dateStr) {
+            try {
+                const key = `${appIdForLocalStorage}_dailyReservations_${dateStr}`;
+                const count = localStorage.getItem(key);
+                return count ? parseInt(count, 10) : 0;
+            } catch (e) {
+                console.warn("localStorage access error (get):", e);
+                return 0; // Assume no reservations if localStorage fails
+            }
+        }
+
+        function updateDailyReservationCount(dateStr, change) { // change is +1 or -1
+            try {
+                const key = `${appIdForLocalStorage}_dailyReservations_${dateStr}`;
+                let count = getDailyReservationCount(dateStr); // Uses its own try-catch
+                count += change;
+                if (count < 0) count = 0;
+                localStorage.setItem(key, count.toString());
+            } catch (e) {
+                console.warn("localStorage access error (set):", e);
+            }
+        }
+
+        function showMessage(message, type = "success") {
+            const messageBox = document.getElementById('messageBox');
+            const messageText = document.getElementById('messageText');
+            messageText.textContent = message;
+            messageBox.className = `fixed bottom-5 right-5 text-white p-3 sm:p-4 rounded-lg shadow-md transition-opacity duration-300 opacity-0 pointer-events-none`;
+            if (type === "error") messageBox.classList.add('bg-red-500');
+            else if (type === "warning") messageBox.classList.add('bg-yellow-500');
+            else messageBox.classList.add('bg-green-500');
+            
+            messageBox.classList.remove('opacity-0', 'pointer-events-none');
+            messageBox.classList.add('opacity-100');
+
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        function renderCalendar() {
+            if (!isAuthReady) {
+                calendarDaysEl.innerHTML = `<p class="text-gray-500 text-center col-span-5 py-10">인증 정보를 기다리는 중...</p>`;
+                return;
+            }
+            if (!db) {
+                 calendarDaysEl.innerHTML = `<p class="text-red-500 text-center col-span-5 py-10">데이터베이스 연결 실패.</p>`;
+                return;
+            }
+
+            calendarDaysEl.innerHTML = ''; 
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth(); // 0-indexed: January is 0, December is 11
+
+            currentMonthYearEl.textContent = `${year}년 ${month + 1}월`;
+
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDayOfMonthDateObject = new Date(year, month, 1);
+            const dayOfWeekOfFirst = firstDayOfMonthDateObject.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+            let leadingEmptyCells = 0;
+            if (dayOfWeekOfFirst >= 1 && dayOfWeekOfFirst <= 5) { // If 1st is Mon-Fri
+                leadingEmptyCells = dayOfWeekOfFirst - 1; // Mon (1) -> 0 empty, Fri (5) -> 4 empty
+            } else { // If 1st is Saturday (6) or Sunday (0)
+                leadingEmptyCells = 0; // No leading empty cells needed as these days are skipped
+                                       // and the first weekday will naturally start the grid.
+            }
+            
+            for (let i = 0; i < leadingEmptyCells; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.classList.add('day-cell', 'empty'); // 'empty' class for styling
+                calendarDaysEl.appendChild(emptyCell);
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDayDate = new Date(year, month, day);
+                const dayOfWeek = currentDayDate.getDay(); // 0 (Sun) to 6 (Sat)
+
+                if (dayOfWeek === 0 || dayOfWeek === 6) { // Skip Sunday and Saturday
+                    continue;
+                }
+
+                const dayCell = document.createElement('div');
+                dayCell.classList.add('day-cell', 'p-2', 'sm:p-3');
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                let slotsHtml = '';
+                for (let slot = 1; slot <= 4; slot++) {
+                    const reservationKey = `${dateStr}_${slot}`;
+                    const reserverInfo = reservations[reservationKey]; 
+                    const isReserved = !!reserverInfo;
+
+                    slotsHtml += `
+                        <button
+                            class="slot-button ${isReserved ? 'reserved' : 'available'}"
+                            data-date="${dateStr}"
+                            data-slot="${slot}"
+                            ${isReserved ? `data-docid="${reserverInfo.docId}" title="예약자: ${reserverInfo.name} (클릭하여 취소 시도)"` : `title="슬롯 ${slot} 예약 가능"`}
+                        >
+                            ${isReserved ? `${slot}. ${reserverInfo.name}` : `${slot}번 예약`}
+                        </button>
+                    `;
+                }
+                dayCell.innerHTML = `<div class="day-number">${day}</div><div class="w-full space-y-1 mt-1">${slotsHtml}</div>`;
+                calendarDaysEl.appendChild(dayCell);
+            }
+            addSlotButtonListeners();
+        }
+
+        function addSlotButtonListeners() {
+            document.querySelectorAll('.slot-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    selectedDateStr = button.dataset.date;
+                    selectedSlotId = parseInt(button.dataset.slot);
+
+                    if (button.classList.contains('available')) {
+                        // Check daily reservation limit before opening modal
+                        const dailyCount = getDailyReservationCount(selectedDateStr);
+                        if (dailyCount >= 2) {
+                            showMessage(`오늘(${selectedDateStr})은 이미 2개의 예약을 하셨습니다. 더 이상 예약할 수 없습니다.`, "warning");
+                            return;
+                        }
+
+                        modalTitle.textContent = `저스트댄스 ${selectedSlotId}번 예약`;
+                        modalDateSlotInfo.textContent = `날짜: ${selectedDateStr}, 슬롯: ${selectedSlotId}번`;
+                        studentNameInput.value = ''; 
+                        reservationPasswordInput.value = '';
+                        inputError.classList.add('hidden');
+                        reservationModal.classList.add('active');
+                        studentNameInput.focus();
+                    } else if (button.classList.contains('reserved')) {
+                        reservationDocIdToDelete = button.dataset.docid;
+                        deleteModalDateSlotInfo.textContent = `날짜: ${selectedDateStr}, 슬롯: ${selectedSlotId}번 예약 취소`;
+                        deletePasswordInput.value = '';
+                        deleteError.classList.add('hidden');
+                        deleteReservationModal.classList.add('active');
+                        deletePasswordInput.focus();
+                    }
+                });
+            });
+        }
+        
+        async function loadReservationsForMonth(year, month) {
+            if (!isAuthReady || !db) return;
+            if (unsubscribeReservations) unsubscribeReservations();
+
+            const reservationsCol = collection(db, `artifacts/${appIdForLocalStorage}/public/data/justDanceReservations`);
+            const q = query(reservationsCol, where("year", "==", year), where("month", "==", month + 1));
+
+            unsubscribeReservations = onSnapshot(q, (querySnapshot) => {
+                reservations = {}; 
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const reservationKey = `${data.fullDate}_${data.slotId}`;
+                    reservations[reservationKey] = { name: data.reserverName, docId: doc.id };
+                });
+                renderCalendar(); 
+            }, (error) => {
+                console.error("Error fetching reservations: ", error);
+                showMessage("예약 정보를 불러오는 중 오류가 발생했습니다.", "error");
+            });
+        }
+
+        async function makeReservation(dateStr, slotId, studentName, password) {
+            if (!isAuthReady || !db || !currentUserId) {
+                showMessage("인증 정보가 준비되지 않았습니다.", "error"); return;
+            }
+            // Double check limit here as well, in case user bypasses button check
+            const dailyCount = getDailyReservationCount(dateStr);
+            if (dailyCount >= 2) {
+                showMessage(`오늘(${dateStr})은 이미 2개의 예약을 하셨습니다. 더 이상 예약할 수 없습니다.`, "warning");
+                closeReservationModal();
+                return;
+            }
+
+            if (!studentName.trim() || !password.trim()) {
+                inputError.textContent = "학번/이름과 비밀번호를 모두 입력해주세요.";
+                inputError.classList.remove('hidden');
+                if (!studentName.trim()) studentNameInput.focus(); else reservationPasswordInput.focus();
+                return;
+            }
+             if (password.trim().length < 4) {
+                inputError.textContent = "비밀번호는 4자리 이상이어야 합니다.";
+                inputError.classList.remove('hidden');
+                reservationPasswordInput.focus();
+                return;
+            }
+            inputError.classList.add('hidden');
+
+            const [year, monthNum, day] = dateStr.split('-').map(Number);
+            const reservationData = {
+                fullDate: dateStr, year: year, month: monthNum, day: day, slotId: slotId,
+                reserverName: studentName.trim(),
+                reservationPassword: password.trim(), 
+                reservedByUid: currentUserId, 
+                timestamp: serverTimestamp()
+            };
+
+            try {
+                const reservationsCol = collection(db, `artifacts/${appIdForLocalStorage}/public/data/justDanceReservations`);
+                const q = query(reservationsCol, where("fullDate", "==", dateStr), where("slotId", "==", slotId));
+                const existingDocs = await getDocs(q);
+                if (!existingDocs.empty) {
+                     showMessage("이미 예약된 슬롯입니다. 페이지가 곧 새로고침됩니다.", "warning");
+                     loadReservationsForMonth(currentDate.getFullYear(), currentDate.getMonth());
+                     closeReservationModal();
+                     return;
+                }
+                await addDoc(reservationsCol, reservationData);
+                updateDailyReservationCount(dateStr, 1); // Increment count on successful reservation
+                showMessage(`${dateStr} ${slotId}번 슬롯이 ${studentName}님 이름으로 예약되었습니다!`, "success");
+                closeReservationModal();
+            } catch (error) {
+                console.error("Error making reservation: ", error);
+                showMessage("예약 중 오류가 발생했습니다.", "error");
+            }
+        }
+
+        async function attemptDeleteReservation(docId, enteredPassword) {
+            if (!isAuthReady || !db) {
+                showMessage("데이터베이스 연결 오류.", "error"); return;
+            }
+            if (!enteredPassword.trim()) {
+                deleteError.textContent = "비밀번호를 입력해주세요.";
+                deleteError.classList.remove('hidden');
+                deletePasswordInput.focus();
+                return;
+            }
+            deleteError.classList.add('hidden');
+
+            try {
+                const docRef = doc(db, `artifacts/${appIdForLocalStorage}/public/data/justDanceReservations`, docId);
+                const reservationDoc = await getDoc(docRef);
+
+                if (reservationDoc.exists()) {
+                    const data = reservationDoc.data();
+                    if (data.reservationPassword === enteredPassword.trim()) {
+                        await deleteDoc(docRef);
+                        updateDailyReservationCount(data.fullDate, -1); // Decrement count on successful deletion
+                        showMessage("예약이 성공적으로 취소되었습니다.", "success");
+                        closeDeleteModal();
+                    } else {
+                        deleteError.textContent = "비밀번호가 일치하지 않습니다.";
+                        deleteError.classList.remove('hidden');
+                        deletePasswordInput.focus();
+                    }
+                } else {
+                    showMessage("예약 정보를 찾을 수 없습니다. 이미 취소되었을 수 있습니다.", "warning");
+                    closeDeleteModal();
+                }
+            } catch (error) {
+                console.error("Error deleting reservation:", error);
+                showMessage("예약 취소 중 오류가 발생했습니다.", "error");
+            }
+        }
+        
+        function closeReservationModal() {
+            reservationModal.classList.remove('active');
+            studentNameInput.value = ''; reservationPasswordInput.value = '';
+        }
+        function closeDeleteModal() {
+            deleteReservationModal.classList.remove('active');
+            deletePasswordInput.value = '';
+            reservationDocIdToDelete = null;
+        }
+        function closeAdminConfirmModal() {
+            adminConfirmDeleteAllModal.classList.remove('active');
+        }
+
+        confirmReservationBtn.addEventListener('click', () => {
+            makeReservation(selectedDateStr, selectedSlotId, studentNameInput.value, reservationPasswordInput.value);
+        });
+        cancelReservationBtn.addEventListener('click', closeReservationModal);
+        
+        confirmDeleteBtn.addEventListener('click', () => {
+            if (reservationDocIdToDelete) {
+                attemptDeleteReservation(reservationDocIdToDelete, deletePasswordInput.value);
+            }
+        });
+        cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+
+        adminDeleteMonthBtn.addEventListener('click', () => {
+            const enteredAdminPass = adminPasswordInput.value;
+            adminErrorEl.classList.add('hidden');
+            if (enteredAdminPass === "audwlsch1") {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth() + 1;
+                adminConfirmMonthEl.textContent = `${year}년 ${month}월`;
+                adminConfirmDeleteAllModal.classList.add('active');
+            } else {
+                adminErrorEl.textContent = "관리자 비밀번호가 올바르지 않습니다.";
+                adminErrorEl.classList.remove('hidden');
+                adminPasswordInput.focus();
+            }
+        });
+
+        confirmAdminDeleteAllBtn.addEventListener('click', async () => {
+            if (!isAuthReady || !db) {
+                showMessage("데이터베이스 연결 오류.", "error"); return;
+            }
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth() + 1; 
+            
+            const reservationsCol = collection(db, `artifacts/${appIdForLocalStorage}/public/data/justDanceReservations`);
+            const q = query(reservationsCol, where("year", "==", year), where("month", "==", month));
+            
+            try {
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    showMessage(`${year}년 ${month}월에는 삭제할 예약이 없습니다.`, "info");
+                    closeAdminConfirmModal();
+                    adminPasswordInput.value = "";
+                    return;
+                }
+                // Note: This does not affect localStorage daily counts for individual users.
+                // Admin deletion is a bulk server-side operation.
+                const batch = writeBatch(db);
+                querySnapshot.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                showMessage(`${year}년 ${month}월의 모든 예약이 삭제되었습니다.`, "success");
+            } catch (error) {
+                console.error("Error deleting all month reservations:", error);
+                showMessage("전체 예약 삭제 중 오류 발생.", "error");
+            } finally {
+                closeAdminConfirmModal();
+                adminPasswordInput.value = ""; 
+            }
+        });
+        cancelAdminDeleteAllBtn.addEventListener('click', closeAdminConfirmModal);
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                if (reservationModal.classList.contains('active')) closeReservationModal();
+                if (deleteReservationModal.classList.contains('active')) closeDeleteModal();
+                if (adminConfirmDeleteAllModal.classList.contains('active')) closeAdminConfirmModal();
+            }
+        });
+        [reservationModal, deleteReservationModal, adminConfirmDeleteAllModal].forEach(modal => {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    if (modal === reservationModal) closeReservationModal();
+                    if (modal === deleteReservationModal) closeDeleteModal();
+                    if (modal === adminConfirmDeleteAllModal) closeAdminConfirmModal();
+                }
+            });
+        });
+
+        prevMonthBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            if (isAuthReady) loadReservationsForMonth(currentDate.getFullYear(), currentDate.getMonth());
+            renderCalendar(); 
+        });
+        nextMonthBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            if (isAuthReady) loadReservationsForMonth(currentDate.getFullYear(), currentDate.getMonth());
+            renderCalendar(); 
+        });
+
+        // Initial load logic ensures this runs after isAuthReady is potentially set.
+        // currentDate is initialized globally.
+        if (isAuthReady) { // If auth becomes ready later
+            renderCalendar();
+            loadReservationsForMonth(currentDate.getFullYear(), currentDate.getMonth());
+        } else { // Render empty shell if auth not ready yet (onAuthChanged will trigger full render)
+             renderCalendar();
+        }
+
+    </script>
+</body>
+</html>
