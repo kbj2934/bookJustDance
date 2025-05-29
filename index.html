@@ -201,14 +201,16 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, getDoc, getDocs, query, where, onSnapshot, serverTimestamp, deleteDoc, writeBatch, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "YOUR_API_KEY", 
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
+         const firebaseConfig = {
+            apiKey: "AIzaSyDgGFv0k7C5ofb3PjNbsKw28HBmOlIsKXc",
+            authDomain: "bookjustdance.firebaseapp.com",
+            projectId: "bookjustdance",
+            storageBucket: "bookjustdance.firebasestorage.app",
+            messagingSenderId: "691181844467",
+            appId: "1:691181844467:web:bab11c8ae3a8c759b80486",
+            measurementId: "G-QGCP7F00SD"
+          };
+
         const appIdForLocalStorage = typeof __app_id !== 'undefined' ? __app_id : 'just-dance-reservations-app-v2'; // Used for localStorage key prefix
 
         let app;
